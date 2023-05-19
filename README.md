@@ -1,69 +1,49 @@
-[![Unix build](https://img.shields.io/github/actions/workflow/status/Kong/kong-plugin/test.yml?branch=master&label=Test&logo=linux)](https://github.com/Kong/kong-plugin/actions/workflows/test.yml)
-[![Luacheck](https://github.com/Kong/kong-plugin/workflows/Lint/badge.svg)](https://github.com/Kong/kong-plugin/actions/workflows/lint.yml)
+[![Unix build](https://img.shields.io/github/actions/workflow/status/mikefero/konnect-plugin-schema-validation/test.yml?branch=main&label=Test&logo=lua)](https://github.com/mikefero/konnect-plugin-schema-validation/actions/workflows/test.yml)
+[![Luacheck](https://github.com/mikefero/konnect-plugin-schema-validation/workflows/Lint/badge.svg)](https://github.com/mikefero/konnect-plugin-schema-validation/actions/workflows/lint.yml)
 
-Kong plugin template
-====================
+# Konnect Plugin Schema Validation
 
-This repository contains a very simple Kong plugin template to get you
-up and running quickly for developing your own plugins.
+Validate Kong Gateway plugin schemas using the Konnect Plugin Schema Validation
+plugin. This plugin, when attached to a route, will only accept a JSON payload
+which must contain a field `schema` with a string representation of a Kong
+Gateway plugin schema to validate.
 
-This template was designed to work with the
-[`kong-pongo`](https://github.com/Kong/kong-pongo) and
-[`kong-vagrant`](https://github.com/Kong/kong-vagrant) development environments.
+```
+{
+  "schema": "<kong-gateway-plugin-schema>"
+}
+```
 
-Please check out those repos `README` files for usage instructions. For a complete
-walkthrough check [this blogpost on the Kong website](https://konghq.com/blog/custom-lua-plugin-kong-gateway).
+## Configuration
 
+While this plugin can be configured globally, it will have no effect and will
+not perform plugin schema validation; ensure this plugin is configured on a
+route.
 
-Naming and versioning conventions
-=================================
+### Enabling the plugin on a Route
 
-There are a number "named" components and related versions. These are the conventions:
+Configure this plugin on a
+[Route](https://docs.konghq.com/latest/admin-api/#Route-object) by using the
+Kong Gateway admin API:
 
-* *Kong plugin name*: This is the name of the plugin as it is shown in the Kong
-  Manager GUI, and the name used in the file system. A plugin named `my-cool-plugin`
-  would have a `handler.lua` file at `./kong/plugins/my-cool-plugin/handler.lua`.
+```
+curl -X POST http://kong:8001/routes \
+  --data 'name=plugin-schema-validation' \
+  --data 'paths[]=/konnect/plugin/schema/validation'
 
-* *Kong plugin version*: This is the version of the plugin code, expressed in
-  `x.y.z` format (using Semantic Versioning is recommended). This version should
-  be set in the `handler.lua` file as the `VERSION` property on the plugin table.
+curl -X POST http://kong:8001/routes/plugin-schema-validation/plugins \
+  --data 'name=konnect-plugin-schema-validation'
+```
 
-* *LuaRocks package name*: This is the name used in the LuaRocks eco system.
-  By convention this is `kong-plugin-[KongPluginName]`. This name is used
-  for the `rockspec` file, both in the filename as well as in the contents
-  (LuaRocks requires that they match).
+## Validation of a Kong Gateway Plugin Schema
 
-* *LuaRocks package version*: This is the version of the package, and by convention
-  it should be identical to the *Kong plugin version*. As with the *LuaRocks package
-  name* the version is used in the `rockspec` file, both in the filename as well
-  as in the contents (LuaRocks requires that they match).
+In order to properly validate a Kong Gateway plugin schema the string
+representation must be properly escaped before adding it to the `schema` field
+in the JSON body of the request. To validate a Kong Gateway plugin schema use
+the proxy/client API using a `POST` method:
 
-* *LuaRocks rockspec revision*: This is the revision of the rockspec, and it only
-  changes if the rockspec is updated. So when the source code remains the same,
-  but build instructions change for example. When there is a new *LuaRocks package
-  version* the *LuaRocks rockspec revision* is reset to `1`. As with the *LuaRocks
-  package name* the revision is used in the `rockspec` file, both in the filename
-  as well as in the contents (LuaRocks requires that they match).
-
-* *LuaRocks rockspec name*: this is the filename of the rockspec. This is the file
-  that contains the meta-data and build instructions for the LuaRocks package.
-  The filename is `[package name]-[package version]-[package revision].rockspec`.
-
-Example
--------
-
-* *Kong plugin name*: `my-cool-plugin`
-
-* *Kong plugin version*: `1.4.2` (set in the `VERSION` field inside `handler.lua`)
-
-This results in:
-
-* *LuaRocks package name*: `kong-plugin-my-cool-plugin`
-
-* *LuaRocks package version*: `1.4.2`
-
-* *LuaRocks rockspec revision*: `1`
-
-* *rockspec file*: `kong-plugin-my-cool-plugin-1.4.2-1.rockspec`
-
-* File *`handler.lua`* is located at: `./kong/plugins/my-cool-plugin/handler.lua` (and similar for the other plugin files)
+```
+curl -X POST http://kong:8000/konnect/plugin/schema/validation \
+  --header "content-type:application/json" \
+  --data '{"schema": "local typedefs = require \"kong.db.schema.typedefs\"\nlocal PLUGIN_NAME = \"konnect-plugin-schema-validation\"\nlocal schema = {\nname = PLUGIN_NAME,\nfields = {\n{ consumer = typedefs.no_consumer },\n{ service = typedefs.no_service },\n{ protocols = typedefs.protocols_http },\n{ config = { type = \"record\", fields = {} } }\n}\n}\nreturn schema\n"}'
+```
