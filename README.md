@@ -28,10 +28,10 @@ Kong Gateway admin API:
 
 ```
 curl -X POST http://kong:8001/routes \
-  --data 'name=plugin-schema-validation' \
+  --data 'name=konnect-plugin-schema-validation' \
   --data 'paths[]=/konnect/plugin/schema/validation'
 
-curl -X POST http://kong:8001/routes/plugin-schema-validation/plugins \
+curl -X POST http://kong:8001/routes/konnect-plugin-schema-validation/plugins \
   --data 'name=konnect-plugin-schema-validation'
 ```
 
