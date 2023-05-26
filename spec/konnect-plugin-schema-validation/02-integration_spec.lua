@@ -12,17 +12,14 @@ for _, strategy in helpers.all_strategies() do if strategy ~= "cassandra" then
       })
       bp.plugins:insert {
         name = PLUGIN_NAME,
-        route = { id = route.id },
-        config = {
-
-        },
+        route = { id = route.id }
       }
 
       assert(helpers.start_kong({
         database   = strategy,
         nginx_conf = "spec/fixtures/custom_nginx.template",
         plugins = "bundled," .. PLUGIN_NAME,
-        declarative_config = strategy == "off" and helpers.make_yaml_file() or nil,
+        declarative_config = strategy == "off" and helpers.make_yaml_file() or nil
       }))
     end)
 
@@ -42,18 +39,12 @@ for _, strategy in helpers.all_strategies() do if strategy ~= "cassandra" then
       describe("validation")
         it("accepts schema definition", function()
           local schema = [[
-            local typedefs = require "kong.db.schema.typedefs"
-            local PLUGIN_NAME = "konnect-plugin-schema-validation"
-            local schema = {
-              name = PLUGIN_NAME,
+            return {
+              name = "plugin-schema",
               fields = {
-                { consumer = typedefs.no_consumer },
-                { service = typedefs.no_service },
-                { protocols = typedefs.protocols_http },
                 { config = { type = "record", fields = {} } }
               }
             }
-            return schema
           ]]
           local r = client:post("/konnect/plugin/schema/validation", {
             headers = {
@@ -68,16 +59,55 @@ for _, strategy in helpers.all_strategies() do if strategy ~= "cassandra" then
           assert.same({ schema = schema }, json)
         end)
 
-        it("fails when schema definition is invalid", function()
+        it("fails when schema definition is invalid - missing fields", function()
           local r = client:post("/konnect/plugin/schema/validation", {
             headers = {
               ["Content-Type"] = "application/json"
             },
             body = {
-              schema = "invalid schema"
+              schema = [[
+                return {
+                  name = "invalid-schema-missing-fields",
+                  missing_fields = {}
+                }
+              ]]
             }
           })
           assert.response(r).has.status(400)
+        end)
+
+        it("fails when schema definition is invalid - nil function", function()
+          local r = client:post("/konnect/plugin/schema/validation", {
+            headers = {
+              ["Content-Type"] = "application/json"
+            },
+            body = {
+              schema = "return schema"
+            }
+          })
+          assert.response(r).has.status(400)
+        end)
+
+        it("fails when schema definition is invalid - missing plugin name", function()
+          local r = client:post("/konnect/plugin/schema/validation", {
+            headers = {
+              ["Content-Type"] = "application/json"
+            },
+            body = {
+              schema = [[
+                return {
+                  fields = {
+                    { config = { type = "record", fields = {} } }
+                  }
+                }
+              ]]
+            }
+          })
+          assert.response(r).has.status(400)
+          local json = assert.response(r).has.jsonbody()
+          assert.same({
+            message = "invalid schema for plugin: missing plugin name"
+          }, json)
         end)
 
         it("fails when using invalid method", function()
@@ -111,7 +141,27 @@ for _, strategy in helpers.all_strategies() do if strategy ~= "cassandra" then
             body = {}
           })
           assert.response(r).has.status(400)
+          local json = assert.response(r).has.jsonbody()
+          assert.same({
+            message = "missing schema field"
+          }, json)
         end)
+      end)
+
+      it("fails when schema definition is empty", function()
+        local r = client:post("/konnect/plugin/schema/validation", {
+          headers = {
+            ["Content-Type"] = "application/json"
+          },
+          body = {
+            schema = "return"
+          }
+        })
+        assert.response(r).has.status(400)
+        local json = assert.response(r).has.jsonbody()
+        assert.same({
+          message = "invalid schema for plugin: cannot be empty"
+        }, json)
       end)
     end)
   end

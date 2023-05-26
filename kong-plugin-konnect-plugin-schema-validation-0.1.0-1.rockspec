@@ -18,7 +18,7 @@ source = {
 
 
 description = {
-  summary = "Konnect Plugin Schema Validation provides an access handle to validate plugin schemas.",
+  summary = "Konnect Plugin Schema Validation provides an access handler to validate a plugin schema.",
   homepage = "https://"..github_account_name..".github.io/"..github_repo_name,
   license = "Apache 2.0",
 }

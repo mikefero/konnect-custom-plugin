@@ -1,8 +1,10 @@
 local kong = kong
 local ngx = ngx
 
+local entity = require "kong.db.schema.entity"
 local errors = require "kong.db.errors"
 local metaschema = require "kong.db.schema.metaschema"
+local plugins_definition = require "kong.db.schema.entities.plugins"
 
 local content_type_json = "application/json"
 
@@ -44,7 +46,7 @@ end
 -- it is valid metaschema. All fields and attributes are validated
 -- while executing checks against the entire plugin schema.
 -- @param input The string representation of the plugin schema.
--- @retrun Errror if plugin schema falis validations; nil otherwise.
+-- @retrun Error if plugin schema falis validations; nil otherwise.
 local function validate_plugin_schema(input)
   -- Load the input into a compiled Lua function which will represent the
   -- plugin schema for further validations.
@@ -63,7 +65,7 @@ local function validate_plugin_schema(input)
     return "error processing load for plugin schema: " .. perr
   end
   if is_empty(plugin_schema) then
-    return nil, "invalid schema for plugin: cannot be empty"
+    return "invalid schema for plugin: cannot be empty"
   end
 
   -- Complete the validation of the plugin schema.
@@ -81,6 +83,29 @@ local function validate_plugin_schema(input)
     return "error calling MetaSubSchema:validate: " .. perr
   end
 
+  -- Load the plugin schema for use in configuration validation when
+  -- associated with a plugin entity
+  local plugins, err = entity.new(plugins_definition)
+  if err then
+    return "unable to create plugin entity: " .. err
+  end
+  local plugin_name = plugin_schema.name
+  if is_empty(plugin_name) then
+    return "invalid schema for plugin: missing plugin name"
+  end
+  -- Note: "pcall" is used for this operation to ensure proper error handling
+  -- for "assert" calls performed in the "entity:new_subschema" function. When
+  -- iterating the arrays/fields of the plugin schema an "assert" is possible.
+  pok, perr = pcall(function()
+    local ok, err = plugins:new_subschema(plugin_name, plugin_schema)
+    if not ok then
+      return "error loading schema for plugin " .. plugin_name .. ": " .. err
+    end
+  end)
+  if not pok then
+    return "error validating plugin schema: " .. perr
+  end
+
   return nil
 end
 
@@ -91,23 +116,23 @@ end
 -- message along with an appropriate status code.
 function konnect_plugin_schema_validation:access(conf)
   if kong.request.get_method() ~= "POST" then
-    kong.response.error(405) -- Method not allowed
+    return kong.response.error(405) -- Method not allowed
   end
   if not is_valid_content_type(kong.request.get_header("Content-Type")) then
-    kong.response.error(415) -- Unsupported media type
+    return kong.response.error(415) -- Unsupported media type
   end
 
   local body, err = kong.request.get_body()
   if err then
-    kong.response.error(400, "unable to get request body: " .. err) -- Bad request
+    return kong.response.error(400, "unable to get request body: " .. err) -- Bad request
   end
   if is_empty(body.schema) then
-    kong.response.error(400, "missing schema field") -- Bad request
+    return kong.response.error(400, "missing schema field") -- Bad request
   end
   local plugin_schema = body.schema
   err = validate_plugin_schema(plugin_schema)
   if err then
-    kong.response.error(400, err) -- Bad request
+    return kong.response.error(400, err) -- Bad request
   end
 
   return kong.response.exit(200, body) -- OK
