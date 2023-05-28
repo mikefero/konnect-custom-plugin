@@ -46,7 +46,8 @@ end
 -- it is valid metaschema. All fields and attributes are validated
 -- while executing checks against the entire plugin schema.
 -- @param input The string representation of the plugin schema.
--- @retrun Error if plugin schema falis validations; nil otherwise.
+-- @return Instantiated plugins subschema entity and loaded plugin schema;
+--         otherwise nil with error if validation fails.
 local function validate_plugin_schema(input)
   -- Load the input into a compiled Lua function which will represent the
   -- plugin schema for further validations.
@@ -58,14 +59,14 @@ local function validate_plugin_schema(input)
     local err
     plugin_schema, err = load(input)()
     if err then
-      return "error processing load for plugin schema: " .. err
+      return nil, nil, "error processing load for plugin schema: " .. err
     end
   end)
   if not pok then
-    return "error processing load for plugin schema: " .. perr
+    return nil, nil, "error processing load for plugin schema: " .. perr
   end
   if is_empty(plugin_schema) then
-    return "invalid schema for plugin: cannot be empty"
+    return nil, nil, "invalid schema for plugin: cannot be empty"
   end
 
   -- Complete the validation of the plugin schema.
@@ -76,37 +77,37 @@ local function validate_plugin_schema(input)
   local pok, perr = pcall(function()
     local ok, err = metaschema.MetaSubSchema:validate(plugin_schema)
     if not ok then
-      return tostring(errors:schema_violation(err))
+      return nil, nil, tostring(errors:schema_violation(err))
     end
   end)
   if not pok then
-    return "error calling MetaSubSchema:validate: " .. perr
+    return nil, nil, "error calling MetaSubSchema:validate: " .. perr
   end
 
   -- Load the plugin schema for use in configuration validation when
-  -- associated with a plugin entity
-  local plugins, err = entity.new(plugins_definition)
+  -- associated with a plugins subschema entity
+  local plugins_subschema_entity, err = entity.new(plugins_definition)
   if err then
-    return "unable to create plugin entity: " .. err
+    return nil, nil, "unable to create plugin entity: " .. err
   end
   local plugin_name = plugin_schema.name
   if is_empty(plugin_name) then
-    return "invalid schema for plugin: missing plugin name"
+    return nil, nil, "invalid schema for plugin: missing plugin name"
   end
   -- Note: "pcall" is used for this operation to ensure proper error handling
   -- for "assert" calls performed in the "entity:new_subschema" function. When
   -- iterating the arrays/fields of the plugin schema an "assert" is possible.
   pok, perr = pcall(function()
-    local ok, err = plugins:new_subschema(plugin_name, plugin_schema)
+    local ok, err = plugins_subschema_entity:new_subschema(plugin_name, plugin_schema)
     if not ok then
-      return "error loading schema for plugin " .. plugin_name .. ": " .. err
+      return nil, nil, "error loading schema for plugin " .. plugin_name .. ": " .. err
     end
   end)
   if not pok then
-    return "error validating plugin schema: " .. perr
+    return nil, nil, "error validating plugin schema: " .. perr
   end
 
-  return nil
+  return plugins_subschema_entity, plugin_schema
 end
 
 --- Access handler for the Konnect Plugin Schema Validation plugin. This
@@ -130,7 +131,7 @@ function konnect_plugin_schema_validation:access(conf)
     return kong.response.error(400, "missing schema field") -- Bad request
   end
   local plugin_schema = body.schema
-  err = validate_plugin_schema(plugin_schema)
+  local _, _, err = validate_plugin_schema(plugin_schema)
   if err then
     return kong.response.error(400, err) -- Bad request
   end

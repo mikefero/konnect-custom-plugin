@@ -146,22 +146,22 @@ for _, strategy in helpers.all_strategies() do if strategy ~= "cassandra" then
             message = "missing schema field"
           }, json)
         end)
-      end)
 
-      it("fails when schema definition is empty", function()
-        local r = client:post("/konnect/plugin/schema/validation", {
-          headers = {
-            ["Content-Type"] = "application/json"
-          },
-          body = {
-            schema = "return"
-          }
-        })
-        assert.response(r).has.status(400)
-        local json = assert.response(r).has.jsonbody()
-        assert.same({
-          message = "invalid schema for plugin: cannot be empty"
-        }, json)
+        it("fails when schema definition is empty", function()
+          local r = client:post("/konnect/plugin/schema/validation", {
+            headers = {
+              ["Content-Type"] = "application/json"
+            },
+            body = {
+              schema = "return"
+            }
+          })
+          assert.response(r).has.status(400)
+          local json = assert.response(r).has.jsonbody()
+          assert.same({
+            message = "invalid schema for plugin: cannot be empty"
+          }, json)
+        end)
       end)
     end)
   end
