@@ -1,6 +1,7 @@
 local kong = kong
 local ngx = ngx
 
+local cjson = require "cjson.safe"
 local entity = require "kong.db.schema.entity"
 local errors = require "kong.db.errors"
 local metaschema = require "kong.db.schema.metaschema"
@@ -107,7 +108,7 @@ local function validate_plugin_schema(input)
     return nil, nil, "error validating plugin schema: " .. perr
   end
 
-  return plugins_subschema_entity, plugin_schema
+  return plugins_subschema_entity, plugin_schema, nil
 end
 
 --- Access handler for the Konnect Plugin Schema Validation plugin. This
@@ -130,13 +131,20 @@ function konnect_plugin_schema_validation:access(conf)
   if is_empty(body.schema) then
     return kong.response.error(400, "missing schema field") -- Bad request
   end
-  local plugin_schema = body.schema
-  local _, _, err = validate_plugin_schema(plugin_schema)
+  local _, plugin_schema, err = validate_plugin_schema(body.schema)
   if err then
     return kong.response.error(400, err) -- Bad request
   end
+  if plugin_schema == nil then
+    return kong.response.error(500, "validated plugin_schema is empty")
+  end
 
-  return kong.response.exit(200, body) -- OK
+  -- Add the plugin name to the response along with the original schema
+  local resp = {
+    name = plugin_schema.name,
+    schema = body.schema
+  }
+  return kong.response.exit(200, cjson.encode(resp)) -- OK
 end
 
 return konnect_plugin_schema_validation
