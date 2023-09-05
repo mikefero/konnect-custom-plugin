@@ -38,14 +38,15 @@ for _, strategy in helpers.all_strategies() do if strategy ~= "cassandra" then
     describe("request", function()
       describe("validation")
         it("accepts schema definition", function()
-          local schema = [[
+          local schema_name = "plugin-schema"
+          local schema = string.format([[
             return {
-              name = "plugin-schema",
+              name = "%s",
               fields = {
                 { config = { type = "record", fields = {} } }
               }
             }
-          ]]
+          ]], schema_name)
           local r = client:post("/konnect/plugin/schema/validation", {
             headers = {
               ["Content-Type"] = "application/json"
@@ -56,7 +57,10 @@ for _, strategy in helpers.all_strategies() do if strategy ~= "cassandra" then
           })
           assert.response(r).has.status(200)
           local json = assert.response(r).has.jsonbody()
-          assert.same({ schema = schema }, json)
+          assert.same({
+            name = schema_name,
+            schema = schema
+          }, json)
         end)
 
         it("fails when schema definition is invalid - missing fields", function()
